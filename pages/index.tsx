@@ -2,185 +2,260 @@
 import { Inter } from 'next/font/google'
 import {useEffect, useState} from "react";
 import {ColumnsType} from "antd/es/table";
-import {Button, Form, Input, message, Modal, Select, Space, Table, Tag} from "antd";
-import { faker } from '@faker-js/faker';
-import {User} from ".prisma/client";
+import {Button, Form, Input, InputNumber, message, Modal, Space, Table, Tag, Select, Descriptions} from "antd";
+// import { faker } from '@faker-js/faker'; // Remove faker for smart inventory system as autofill is not used
+import {Inventory} from ".prisma/client";
 const inter = Inter({ subsets: ['latin'] })
 
-const layout = {
-  labelCol: { span: 8 },
-  wrapperCol: { span: 16 },
-};
-
-const tailLayout = {
-  wrapperCol: { offset: 8, span: 12 },
-};
-
 export default function Home() {
-  const [users, setUsers] = useState<User[]>([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [items, setItems] = useState<Inventory[]>([]);
+  const [filteredItems, setFilteredItems] = useState<Inventory[]>([]);
   const [form] = Form.useForm();
+  const [editingItem, setEditingItem] = useState<Inventory | null>(null);
+  const [selectedItem, setSelectedItem] = useState<Inventory | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  const onFinish = async (values: any) => {
-    console.log(values);
-    setIsModalOpen(false);
-    fetch('/api/create_user', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(values)
-    }).then(async response => {
-      if (response.status === 200) {
-        const user = await response.json();
-        message.success('created user ' + user.name);
-        setUsers([...users, user]);
-
-      } else message.error(
-          `Failed to create user:\n ${JSON.stringify(await response.json())}`);
-    }).catch(res=>{message.error(res)})
+  const fetchItems = async () => {
+    const res = await fetch("/api/inventory");
+    const data = await res.json();
+    setItems(data);
+    setFilteredItems(data);
   };
 
-  const onDelete = async (user: any) => {
-    const {id} = user;
-    setIsModalOpen(false);
-    fetch('/api/delete_user', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({id})
-    }).then(async response => {
-      if (response.status === 200) {
-        await response.json();
-        message.success('Deleted user ' + user.name);
-        setUsers(users.filter(u=> u.id !== id ));
-
-      } else message.error(
-          `Failed to delete user:\n ${user.name}`);
-    }).catch(res=>{message.error(res)})
-  };
-
-  const columns: ColumnsType<User> = [
-    {
-      title: 'ID',
-      dataIndex: 'id',
-      key: 'id',
-      render: (text) => <a>{text}</a>,
-    },
-    {
-      title: 'Name',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text) => <a>{text}</a>,
-    },
-    {
-      title: 'Email',
-      dataIndex: 'email',
-      key: 'email',
-    },
-    {
-      title: 'Address',
-      dataIndex: 'address',
-      key: 'address',
-    },
-
-    {
-      title: 'Action',
-      key: 'action',
-      render: (_, record) => (
-          <Space size="middle">
-            <a onClick={()=>onDelete(record)}>Delete</a>
-          </Space>
-      ),
-    },
-  ];
-
-
-  const onReset = () => {
-    form.resetFields();
-  };
-
-  const onFill = () => {
-    const firstName = faker.person.firstName();
-    const lastName = faker.person.lastName();
-    const email = faker.internet.email({ firstName, lastName });
-    const street = faker.location.streetAddress();
-    const city = faker.location.city();
-    const state  = faker.location.state({ abbreviated: true });
-    const zip = faker.location.zipCode()
-
-    form.setFieldsValue({
-      name: `${firstName} ${lastName}`,
-      email: email,
-      address:
-          `${street}, ${city}, ${state}, US, ${zip}`
-    });
-  };
-  const showModal = () => {
-    setIsModalOpen(true);
-    form.resetFields();
-  };
-
-  const handleCancel = () => {
-    setIsModalOpen(false);
-    form.resetFields();
-  };
-  useEffect(()=>{
-    fetch('api/all_user', {method: "GET"})
-        .then(res => {
-          res.json().then(
-              (json=> {setUsers(json)})
-          )
-        })
+  useEffect(() => {
+    fetchItems();
   }, []);
 
-  if (!users) return "Give me a second";
+  const showModal = () => {
+    setEditingItem(null);
+    form.resetFields();
+    setIsModalOpen(true);
+  };
 
-  return  <>
-    <Button type="primary" onClick={showModal}>
-      Add User
-    </Button>
-    <Modal title="Basic Modal" onCancel={handleCancel}
-           open={isModalOpen} footer={null}  width={800}>
-      <Form
-          {...layout}
-          form={form}
-          name="control-hooks"
-          onFinish={onFinish}
-          style={{ maxWidth: 600 }}
+  const handleEdit = (item: Inventory) => {
+    setEditingItem(item);
+    form.setFieldsValue(item);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: number) => {
+    const res = await fetch(`/api/inventory?id=${id}`, { method: "DELETE" });
+    if (res.ok) {
+      message.success("Item deleted");
+      fetchItems();
+    } else {
+      message.error("Failed to delete item");
+    }
+  };
+
+  const handleSearch = (value: string) => {
+    const filtered = items.filter(
+      (item) =>
+        item.name.toLowerCase().includes(value.toLowerCase()) ||
+        (item.description && item.description.toLowerCase().includes(value.toLowerCase()))
+    );
+    setFilteredItems(filtered);
+  };
+
+  const handleCategoryFilter = (value: string | undefined) => {
+    if (!value) {
+      setFilteredItems(items);
+      return;
+    }
+
+    const filtered = items.filter((item) => item.category === value);
+    setFilteredItems(filtered);
+  };
+
+  const onFinish = async (values: any) => {
+    const url = editingItem ? `/api/inventory?id=${editingItem.id}` : "/api/inventory";
+    const method = editingItem ? "PUT" : "POST";
+
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...values,
+        unitPrice: parseFloat(values.unitPrice),
+        quantityInStock: parseInt(values.quantityInStock),
+        reorderLevel: parseInt(values.reorderLevel),
+        reorderTimeInDays: parseInt(values.reorderTimeInDays),
+        quantityInReorder: parseInt(values.quantityInReorder)
+      })
+    });
+
+    if (res.ok) {
+      const updated = await res.json();
+      const newData = editingItem
+        ? items.map((i) => (i.id === updated.id ? updated : i))
+        : [...items, updated];
+
+      setItems(newData);
+      setFilteredItems(newData);
+
+      message.success(editingItem ? "Item updated" : "Item added");
+      form.resetFields();
+      setIsModalOpen(false);
+    } else {
+      message.error("Failed to save item");
+    }
+  };
+
+  const columns: ColumnsType<Inventory> = [
+    { title: "ID", dataIndex: "id", key: "id" },
+    { title: "Name", dataIndex: "name", key: "name" },
+    { title: "Description", dataIndex: "description", key: "description" },
+    {
+      title: "Unit Price",
+      dataIndex: "unitPrice",
+      key: "unitPrice",
+      render: (value: number) => `$${value.toFixed(2)}`
+    },
+    {
+      title: "Stock",
+      dataIndex: "quantityInStock",
+      key: "quantityInStock",
+      render: (stock: number, record) =>
+        stock < record.reorderLevel ? (
+          <Tag color="red">{stock} (Low)</Tag>
+        ) : (
+          <span>{stock}</span>
+        )
+    },
+    { title: "Reorder Level", dataIndex: "reorderLevel", key: "reorderLevel" },
+    { title: "Reorder Time (Days)", dataIndex: "reorderTimeInDays", key: "reorderTimeInDays" },
+    { title: "Quantity in Reorder", dataIndex: "quantityInReorder", key: "quantityInReorder" },
+    { title: "Category", dataIndex: "category", key: "category" },
+    {
+      title: "Last Updated",
+      dataIndex: "lastUpdated",
+      key: "lastUpdated",
+      render: (date: string) => new Date(date).toLocaleString()
+    },
+    {
+      title: "Actions",
+      key: "actions",
+      render: (_, record) => (
+        <Space>
+          <Button type="link" onClick={() => handleEdit(record)}>Edit</Button>
+          <Button type="link" danger onClick={() => handleDelete(record.id)}>Delete</Button>
+        </Space>
+      )
+    }
+  ];
+
+  return (
+    <>
+      <Button type="primary" onClick={showModal}>Add Item</Button>
+
+      {/* Modal for adding a new item to the inventory system or editing an existing item*/}
+      <Modal
+        title={editingItem ? "Edit Item" : "Add New Item"}
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        footer={null}
       >
-        <Form.Item name="name" label="Name" rules={[{ required: true }]}>
-          <Input />
-        </Form.Item>
-        <Form.Item name="email" label="email" rules={[{ required: true }]}>
-          <Input />
-        </Form.Item>
-        <Form.Item name="address" label="address" rules={[{ required: true }]}>
-          <Input />
-        </Form.Item>
+        <Form layout="vertical" form={form} onFinish={onFinish}>
+          <Form.Item name="name" label="Name" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="description" label="Description">
+            <Input />
+          </Form.Item>
+          <Form.Item name="unitPrice" label="Unit Price" rules={[{ required: true }]}>
+            <InputNumber min={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="quantityInStock" label="Quantity in Stock" rules={[{ required: true }]}>
+            <InputNumber min={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="reorderLevel" label="Reorder Level" rules={[{ required: true }]}>
+            <InputNumber min={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="reorderTimeInDays" label="Reorder Time (days)">
+            <InputNumber min={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="quantityInReorder" label="Quantity in Reorder">
+            <InputNumber min={0} style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="category" label="Category">
+            <Select placeholder="Select a category">
+              <Select.Option value="Electronics">Electronics</Select.Option>
+              <Select.Option value="Groceries">Groceries</Select.Option>
+              <Select.Option value="Office Supplies">Office Supplies</Select.Option>
+              <Select.Option value="Outdoors">Outdoors</Select.Option>
+              <Select.Option value="Home & Kitchen">Home & Kitchen</Select.Option>
+            </Select>
+          </Form.Item>
+          <Form.Item>
+            <Button type="primary" htmlType="submit" style={{ marginRight: 8 }}>
+              {editingItem ? "Update" : "Submit"}
+            </Button>
+            <Button onClick={() => { setIsModalOpen(false); form.resetFields(); }}>
+              Cancel
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
 
-        <Form.Item {...tailLayout} >
-          <Button type="primary" htmlType="submit">
-            Submit
-          </Button>
-          <Button htmlType="button" onClick={onReset}>
-            Reset
-          </Button>
-          <Button  htmlType="button" onClick={onFill}>
-            Fill form
-          </Button>
-          <Button  htmlType="button" onClick={handleCancel}>
-            Cancel
-          </Button>
-        </Form.Item>
-      </Form>
-    </Modal>
-    {/*<p>{JSON.stringify(users)}</p>*/}
-    <Table columns={columns} dataSource={users} />;
-  </>;
+      {/* Search and Category filtering functionalities for Smart Inventory */}
+      <div style={{ display: "flex", marginTop: 16, marginBottom: 8 }}>
+        <Input.Search
+          placeholder="Search by name or description"
+          onChange={(e) => handleSearch(e.target.value)}
+          style={{ width: 300 }}
+        />
 
+        <Select
+          placeholder="Filter by Category"
+          allowClear
+          onChange={(value) => handleCategoryFilter(value)}
+          style={{ width: 200, marginLeft: 10 }}
+        >
+          {[...new Set(items.map((item) => item.category).filter(Boolean))].map((cat) => (
+            <Select.Option key={cat} value={cat}>
+              {cat}
+            </Select.Option>
+          ))}
+        </Select>
+      </div>
 
+      {/* Inventory Table */}
+      <Table
+        columns={columns}
+        dataSource={filteredItems}
+        rowKey="id"
+        style={{ marginTop: 10 }}
+        onRow={(record) => ({
+          onClick: () => {
+            setSelectedItem(record);
+            setIsDetailModalOpen(true);
+          }
+        })}
+      />
+
+      {/* Modal for viewing item details for a selected item */}
+      <Modal
+        open={isDetailModalOpen}
+        title="Item Details"
+        footer={null}
+        onCancel={() => setIsDetailModalOpen(false)}
+      >
+        {selectedItem && (
+          <Descriptions bordered column={1}>
+            <Descriptions.Item label="Name">{selectedItem.name}</Descriptions.Item>
+            <Descriptions.Item label="Description">{selectedItem.description}</Descriptions.Item>
+            <Descriptions.Item label="Category">{selectedItem.category}</Descriptions.Item>
+            <Descriptions.Item label="Price">${selectedItem.unitPrice.toFixed(2)}</Descriptions.Item>
+            <Descriptions.Item label="Quantity in Stock">{selectedItem.quantityInStock}</Descriptions.Item>
+            <Descriptions.Item label="Reorder Level">{selectedItem.reorderLevel}</Descriptions.Item>
+            <Descriptions.Item label="Quantity in Reorder">{selectedItem.quantityInReorder}</Descriptions.Item>
+            <Descriptions.Item label="Reorder Time (Days)">{selectedItem.reorderTimeInDays}</Descriptions.Item>
+            <Descriptions.Item label="Last Updated">{new Date(selectedItem.lastUpdated).toLocaleString()}</Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
+    </>
+  );
 }
+

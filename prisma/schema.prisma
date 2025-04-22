@@ -11,19 +11,15 @@ datasource db {
   //   mysql://USER:PASSWORD@HOST:PORT/DATABASE
 }
 
-model User {
-  id      Int     @id @default(autoincrement())
-  email   String  @unique
-  name    String?
-  address String?
-  posts   Post[]
-}
-
-model Post {
-  id        Int     @id @default(autoincrement())
-  title     String
-  content   String?
-  published Boolean @default(false)
-  author    User    @relation(fields: [authorId], references: [id])
-  authorId  Int
+model Inventory {
+  id                 Int      @id @default(autoincrement()) // Inventory ID
+  name               String                                 // Product Name
+  description        String?                                // Optional Description
+  unitPrice          Float                                  // Price per unit
+  quantityInStock    Int                                    // Stock count
+  reorderLevel       Int                                    // Threshold for restocking
+  reorderTimeInDays  Int?                                   // How long it takes to restock
+  quantityInReorder  Int?                                   // Quantity currently being reordered
+  category           String?                                // classification of product
+  lastUpdated        DateTime @updatedAt                    // Auto updates on changes
 }
