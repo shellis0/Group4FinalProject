@@ -33,13 +33,15 @@ export default function Home() {
     setIsModalOpen(true);
   };
 
-  const handleEdit = (item: Inventory) => {
+  const handleEdit = (event: MouseEvent, item: Inventory) => {
+    event.stopPropagation(); // Prevent item details modal from opening when editing a selected item
     setEditingItem(item);
     form.setFieldsValue(item);
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (event: MouseEvent, id: number) => {
+    event.stopPropagation(); // Prevent item details modal from opening after deleting a selected item
     const res = await fetch(`/api/inventory?id=${id}`, { method: "DELETE" });
     if (res.ok) {
       message.success("Item deleted");
@@ -138,8 +140,8 @@ export default function Home() {
       key: "actions",
       render: (_, record) => (
         <Space>
-          <Button type="link" onClick={() => handleEdit(record)}>Edit</Button>
-          <Button type="link" danger onClick={() => handleDelete(record.id)}>Delete</Button>
+          <Button type="link" onClick={(event) => handleEdit(event, record)}>Edit</Button>
+          <Button type="link" danger onClick={(event) => handleDelete(event, record.id)}>Delete</Button>
         </Space>
       )
     }
