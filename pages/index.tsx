@@ -17,7 +17,7 @@ export default function Home() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const fetchItems = async () => {
-    const res = await fetch("/api/inventory");
+    const res = await fetch("/api/inventory", { method: "GET" });
     const data = await res.json();
     setItems(data);
     setFilteredItems(data);
@@ -33,6 +33,7 @@ export default function Home() {
     setIsModalOpen(true);
   };
 
+  // Referenced Material: https://developer.mozilla.org/en-US/docs/Web/API/Event/stopPropagation
   const handleEdit = (event: MouseEvent, item: Inventory) => {
     event.stopPropagation(); // Prevent item details modal from opening when editing a selected item
     setEditingItem(item);
@@ -75,7 +76,7 @@ export default function Home() {
     const method = editingItem ? "PUT" : "POST";
 
     const res = await fetch(url, {
-      method,
+      method: method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...values,
@@ -231,7 +232,7 @@ export default function Home() {
         onRow={(record) => ({
           onClick: () => {
             setSelectedItem(record);
-            setIsDetailModalOpen(true);
+            setIsDetailModalOpen(true); // For displaying the item details modal, this is prevented if an item being edited/removed
           }
         })}
       />
